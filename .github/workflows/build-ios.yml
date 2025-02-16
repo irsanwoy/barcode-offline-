@@ -21,9 +21,9 @@ jobs:
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
-      # Langkah 5: Upload file IPA sebagai artifact
+      # Langkah 5: Upload file IPA sebagai artifact (versi terbaru)
       - name: Upload IPA
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: app.ipa
           path: build/ios/ipa
