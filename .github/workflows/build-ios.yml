@@ -1,0 +1,29 @@
+name: Build iOS
+on: [push]  # Trigger workflow saat ada push ke repositori
+jobs:
+  build:
+    runs-on: macos-latest  # Gunakan runner macOS terbaru
+    steps:
+      # Langkah 1: Checkout kode dari repositori
+      - uses: actions/checkout@v2
+
+      # Langkah 2: Set up Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable  # Gunakan Flutter versi stable
+
+      # Langkah 3: Install dependencies
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Langkah 4: Build aplikasi iOS
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+
+      # Langkah 5: Upload file IPA sebagai artifact
+      - name: Upload IPA
+        uses: actions/upload-artifact@v2
+        with:
+          name: app.ipa
+          path: build/ios/ipa
