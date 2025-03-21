@@ -16,9 +16,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
   final _manualBarcodeController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
 
+  // Variable untuk menyimpan barcode yang dipindai fisik
+  String _barcodeFromPhysicalScanner = '';
+
+  // Fokus untuk raw keyboard listener (pemindai fisik)
+  final FocusNode _barcodeFocusNode = FocusNode();
+
+  // Method untuk menangani pemindaian barcode
   Future<void> _scanBarcode() async {
     final MobileScannerController controller = MobileScannerController();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -38,8 +45,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+  // Menangani barcode yang dipindai
   Future<void> _handleScannedBarcode(String barcode) async {
-    final product = await _dbHelper.getProductByBarcode(barcode);
+    // Menghapus karakter tambahan jika ada
+    String cleanedBarcode = barcode.trim();
+    print("Barcode yang diterima: $cleanedBarcode");
+
+    final product = await _dbHelper.getProductByBarcode(cleanedBarcode);
     if (product != null) {
       _addToCart(product);
     } else {
@@ -49,6 +61,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
+  // Dialog untuk input manual
   void _showManualEntryDialog() {
     showDialog(
       context: context,
@@ -100,24 +113,28 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+  // Menambahkan item ke dalam keranjang
   void _addToCart(Product product, {int quantity = 1}) {
     setState(() {
       // Cek apakah produk sudah ada di keranjang
       final existingIndex = cartItems.indexWhere((item) => item.id == product.id);
-      
+
       if (existingIndex != -1) {
         // Update quantity jika sudah ada
         final existingProduct = cartItems[existingIndex];
         cartItems[existingIndex] = existingProduct.copyWith(
-          unitPrice: existingProduct.unitPrice * quantity,
+          unitPrice: existingProduct.unitPrice + (product.unitPrice * quantity),
+          wholesalePrice: existingProduct.wholesalePrice + (product.wholesalePrice * quantity),
         );
       } else {
-        // Tambahkan sebagai item baru
+        // Tambahkan sebagai item baru dengan harga satuan dan grosir
         cartItems.add(product.copyWith(
           unitPrice: product.unitPrice * quantity,
+          wholesalePrice: product.wholesalePrice * quantity,
         ));
       }
-      
+
+      // Menambahkan total harga satuan dan harga grosir ke total keseluruhan
       total += product.unitPrice * quantity;
     });
   }
@@ -136,6 +153,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       ),
       body: Column(
         children: [
+          // Membungkus ListView dengan Expanded agar bisa mengisi ruang yang tersedia
           Expanded(
             child: ListView.builder(
               itemCount: cartItems.length,
@@ -169,11 +187,48 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _scanBarcode,
-        tooltip: 'Scan Barcode',
-        child: Icon(Icons.qr_code_scanner),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: _scanBarcode, // Tombol untuk scan kamera
+            tooltip: 'Scan Barcode (Kamera)',
+            child: Icon(Icons.qr_code_scanner),
+          ),
+          SizedBox(height: 10),
+          FloatingActionButton(
+            onPressed: _listenToPhysicalScanner, // Tombol untuk scan fisik
+            tooltip: 'Scan Barcode (Perangkat Fisik)',
+            child: Icon(Icons.bluetooth),
+          ),
+        ],
+      ),
+      bottomNavigationBar: RawKeyboardListener(
+        focusNode: _barcodeFocusNode,
+        onKey: (RawKeyEvent event) {
+          if (event.runtimeType.toString() == "RawKeyDownEvent") {
+            final inputBarcode = event.logicalKey.keyLabel;
+            print("Input Barcode dari Pemindai Fisik: $inputBarcode"); // Debugging log untuk melihat input
+            if (inputBarcode != null && inputBarcode.isNotEmpty && inputBarcode != 'Enter') {
+              setState(() {
+                _barcodeFromPhysicalScanner += inputBarcode; // Gabungkan karakter barcode
+              });
+            }
+
+            // Jika input adalah 'Enter', proses barcode yang sudah terkumpul
+            if (inputBarcode == 'Enter' && _barcodeFromPhysicalScanner.isNotEmpty) {
+              _handleScannedBarcode(_barcodeFromPhysicalScanner); // Proses barcode setelah input selesai
+              _barcodeFromPhysicalScanner = ''; // Reset setelah diproses
+            }
+          }
+        },
+        child: SizedBox(), // Gak perlu widget di sini, cukup listener
       ),
     );
+  }
+
+  // Fungsi untuk mendengarkan input dari pemindai fisik
+  void _listenToPhysicalScanner() {
+    _barcodeFocusNode.requestFocus(); // Meminta fokus ke RawKeyboardListener untuk menangkap input dari perangkat fisik
   }
 }
